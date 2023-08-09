@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake Data with Leaflet</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <style>
+        .legend {
+            padding: 6px 8px;
+            font: 14px Arial, Helvetica, sans-serif;
+            background: rgba(255,255,255,0.8);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+            line-height: 24px;
+            color: #555;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="loadEarthquakeData()">Load Earthquake Data</button>
+    <div id="earthquakeMap" style="width: 100%; height: 500px;"></div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('earthquakeMap').setView([20, 0], 2);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        async function fetchEarthquakeData(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch data. Status code: ${response.status}`);
+                }
+                return response.json();
+            } catch (error) {
+                throw new Error(`Error fetching data: ${error.message}`);
+            }
+        }
+
+        function processEarthquakeData(geojsonData) {
+            const features = geojsonData.features;
+            for (const feature of features) {
+                const properties = feature.properties;
+                const [longitude, latitude, depth] = feature.geometry.coordinates;
+                const time = new Date(properties.time).toLocaleString();
+
+                const marker = L.circleMarker([latitude, longitude], {
+                    radius: properties.mag * 2,  // scale the radius based on magnitude
+                    fillColor: getColor(properties.mag),
+                    color: "#000",
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                });
+
+                marker.bindPopup(`
+                    <strong>Magnitude:</strong> ${properties.mag}<br>
+                    <strong>Place:</strong> ${properties.place}<br>
+                    <strong>Depth:</strong> ${depth}km<br>
+                    <strong>Time:</strong> ${time}
+                `);
+                marker.addTo(map);
+            }
+        }
+
+        function getColor(magnitude) {
+            return magnitude > 5 ? '#FF0000' :
+                   magnitude > 4  ? '#FF8C00' :
+                   magnitude > 3  ? '#FFD700' :
+                   magnitude > 2  ? '#ADFF2F' :
+                                    '#7FFF00';
+        }
+
+        function loadEarthquakeData() {
+            const url = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson';
+            fetchEarthquakeData(url)
+                .then(geojsonData => processEarthquakeData(geojsonData))
+                .catch(error => console.error(error.message));
+        }
+
+        // Legend
+        const legend = L.control({position: 'bottomright'});
+        legend.onAdd = function (map) {
+            const div = L.DomUtil.create('div', 'legend');
+            const magnitudes = [0, 2, 3, 4, 5];
+            const labels = [];
+
+            for (let i = 0; i < magnitudes.length; i++) {
+                div.innerHTML += `
+                    <i style="background: ${getColor(magnitudes[i] + 1)}"></i> 
+                    ${magnitudes[i]}${magnitudes[i + 1] ? '&ndash;' + magnitudes[i + 1] + '<br>' : '+'}
+                `;
+            }
+
+            return div;
+        };
+
+        legend.addTo(map);
+    </script>
+</body>
+</html>
